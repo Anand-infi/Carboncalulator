@@ -42,36 +42,36 @@
       font-size: 16px;
     }
     button:hover { background: #218838; }
-    .toggle {
+    .info {
       text-align: center;
       margin-top: 10px;
-      color: #007bff;
-      cursor: pointer;
+      font-size: 13px;
+      color: #777;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2 id="formTitle">Login</h2>
+    <h2>Authorized Access Only</h2>
     <input type="email" id="email" placeholder="Email" required>
     <input type="password" id="password" placeholder="Password" required>
     <button id="loginBtn">Login</button>
-    <p class="toggle" id="toggleForm">Don't have an account? Sign up</p>
+    <p class="info">Only admin-registered users can log in.</p>
   </div>
 
   <script type="module">
-    // ✅ Replace this with your actual Firebase config
+    // ✅ Replace this with your Firebase config
     const firebaseConfig = {
-  	 apiKey: "AIzaSyDCyXTdzGqevLfj754uaU-6jrEiXnUx_mQ",
- 	 authDomain: "carbon-calculator-infinite.firebaseapp.com",
- 	 projectId: "carbon-calculator-infinite",
- 	 storageBucket: "carbon-calculator-infinite.firebasestorage.app",
-	 messagingSenderId: "1029287920151",
-	 appId: "1:1029287920151:web:7a9e0cf0f4eefce5385252"
+	  apiKey: "AIzaSyDCyXTdzGqevLfj754uaU-6jrEiXnUx_mQ",
+	  authDomain: "carbon-calculator-infinite.firebaseapp.com",
+	  projectId: "carbon-calculator-infinite",
+	  storageBucket: "carbon-calculator-infinite.firebasestorage.app",
+	  messagingSenderId: "1029287920151",
+	  appId: "1:1029287920151:web:7a9e0cf0f4eefce5385252"
     };
 
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
-    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } 
+    import { getAuth, signInWithEmailAndPassword } 
       from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
 
     const app = initializeApp(firebaseConfig);
@@ -80,40 +80,26 @@
     const email = document.getElementById("email");
     const password = document.getElementById("password");
     const btn = document.getElementById("loginBtn");
-    const toggle = document.getElementById("toggleForm");
-    const formTitle = document.getElementById("formTitle");
-
-    let isSignup = false;
-
-    toggle.addEventListener("click", () => {
-      isSignup = !isSignup;
-      formTitle.textContent = isSignup ? "Sign Up" : "Login";
-      btn.textContent = isSignup ? "Sign Up" : "Login";
-      toggle.textContent = isSignup
-        ? "Already have an account? Login"
-        : "Don't have an account? Sign up";
-    });
 
     btn.addEventListener("click", async () => {
       const emailVal = email.value.trim();
       const passVal = password.value.trim();
+
       if (!emailVal || !passVal) return alert("Please enter email and password");
 
       try {
-        if (isSignup) {
-          await createUserWithEmailAndPassword(auth, emailVal, passVal);
-          alert("Signup successful! You can now log in.");
-          isSignup = false;
-          formTitle.textContent = "Login";
-          btn.textContent = "Login";
-        } else {
-          await signInWithEmailAndPassword(auth, emailVal, passVal);
-          alert("Login successful!");
-          // 👉 Redirect user to dashboard (to be created later)
-          window.location.href = "dashboard.html";
-        }
+        await signInWithEmailAndPassword(auth, emailVal, passVal);
+        alert("Login successful!");
+        // Redirect to dashboard
+        window.location.href = "dashboard.html";
       } catch (error) {
-        alert(error.message);
+        if (error.code === "auth/user-not-found") {
+          alert("Access denied: User not registered by admin.");
+        } else if (error.code === "auth/wrong-password") {
+          alert("Incorrect password. Please try again.");
+        } else {
+          alert("Login failed: " + error.message);
+        }
       }
     });
   </script>

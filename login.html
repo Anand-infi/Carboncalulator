@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login | Carbon Data Platform</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f5f7;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      width: 360px;
+      background: #fff;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h2 { text-align: center; color: #333; }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin-top: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      width: 100%;
+      margin-top: 15px;
+      padding: 10px;
+      background: #28a745;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover { background: #218838; }
+    .toggle {
+      text-align: center;
+      margin-top: 10px;
+      color: #007bff;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 id="formTitle">Login</h2>
+    <input type="email" id="email" placeholder="Email" required>
+    <input type="password" id="password" placeholder="Password" required>
+    <button id="loginBtn">Login</button>
+    <p class="toggle" id="toggleForm">Don't have an account? Sign up</p>
+  </div>
+
+  <script type="module">
+    // ✅ Replace this with your actual Firebase config
+    const firebaseConfig = {
+  	 apiKey: "AIzaSyDCyXTdzGqevLfj754uaU-6jrEiXnUx_mQ",
+ 	 authDomain: "carbon-calculator-infinite.firebaseapp.com",
+ 	 projectId: "carbon-calculator-infinite",
+ 	 storageBucket: "carbon-calculator-infinite.firebasestorage.app",
+	 messagingSenderId: "1029287920151",
+	 appId: "1:1029287920151:web:7a9e0cf0f4eefce5385252"
+    };
+
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } 
+      from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    const email = document.getElementById("email");
+    const password = document.getElementById("password");
+    const btn = document.getElementById("loginBtn");
+    const toggle = document.getElementById("toggleForm");
+    const formTitle = document.getElementById("formTitle");
+
+    let isSignup = false;
+
+    toggle.addEventListener("click", () => {
+      isSignup = !isSignup;
+      formTitle.textContent = isSignup ? "Sign Up" : "Login";
+      btn.textContent = isSignup ? "Sign Up" : "Login";
+      toggle.textContent = isSignup
+        ? "Already have an account? Login"
+        : "Don't have an account? Sign up";
+    });
+
+    btn.addEventListener("click", async () => {
+      const emailVal = email.value.trim();
+      const passVal = password.value.trim();
+      if (!emailVal || !passVal) return alert("Please enter email and password");
+
+      try {
+        if (isSignup) {
+          await createUserWithEmailAndPassword(auth, emailVal, passVal);
+          alert("Signup successful! You can now log in.");
+          isSignup = false;
+          formTitle.textContent = "Login";
+          btn.textContent = "Login";
+        } else {
+          await signInWithEmailAndPassword(auth, emailVal, passVal);
+          alert("Login successful!");
+          // 👉 Redirect user to dashboard (to be created later)
+          window.location.href = "dashboard.html";
+        }
+      } catch (error) {
+        alert(error.message);
+      }
+    });
+  </script>
+</body>
+</html>

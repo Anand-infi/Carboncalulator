@@ -8,135 +8,70 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 20px; }
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f4f6f9; }
     h2 { color: #333; }
-    .card { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    input, button, select { margin: 5px 0; padding: 8px; width: 100%; }
-    button { background: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px; }
+    .card { background: #fff; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    select, input, button { padding: 8px; margin: 5px 0; width: 100%; border-radius: 5px; border: 1px solid #ccc; }
+    button { background: #007bff; color: #fff; border: none; cursor: pointer; }
     button:hover { background: #0056b3; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-    th { background: #eaeaea; }
+    label { display: block; margin: 3px 0; }
   </style>
 </head>
 <body>
   <h2>🌿 Admin Dashboard</h2>
 
-  <!-- Section 1: Add New Category -->
+  <!-- Section 1: Add Category -->
   <div class="card">
     <h3>Add New Emission Category</h3>
     <input type="text" id="categoryName" placeholder="Category name (e.g., Transport)" />
     <input type="number" id="emissionFactor" placeholder="Emission factor (e.g., 2.31)" />
-    <button id="addCategory">Add Category</button>
+    <button id="addCategoryBtn">Add Category</button>
     <p id="catMsg"></p>
   </div>
 
   <!-- Section 2: Assign Categories to Users -->
   <div class="card">
     <h3>Assign Categories to Users</h3>
-    <select id="userSelect"><option>Loading users...</option></select>
-    <select id="categoryAssign"><option>Loading categories...</option></select>
-    <button id="assignCatBtn">Assign Category</button>
+    <select id="userSelect"><option value="">Select a user</option></select>
+    <div id="categoryCheckboxes"></div>
+    <button id="assignButton">Assign Categories</button>
     <p id="assignMsg"></p>
-  </div>
-
-  <!-- Section 3: View Submitted Emission Data -->
-  <div class="card">
-    <h3>All Submitted Data</h3>
-    <table id="dataTable">
-      <thead>
-        <tr>
-          <th>User Email</th>
-          <th>Category</th>
-          <th>Activity Value</th>
-          <th>Factor</th>
-          <th>Total Emission</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
     import { 
-      getFirestore, collection, addDoc, getDocs, updateDoc, doc, getDoc, query, where, onSnapshot, arrayUnion 
+      getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, arrayUnion 
     } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
 
-    // 🔧 CONFIGURATION
+    // 🔧 Firebase configuration (replace with your project values)
     const firebaseConfig = {
-	  apiKey: "AIzaSyDCyXTdzGqevLfj754uaU-6jrEiXnUx_mQ",
-	  authDomain: "carbon-calculator-infinite.firebaseapp.com",
-	  projectId: "carbon-calculator-infinite",
-	  storageBucket: "carbon-calculator-infinite.firebasestorage.app",
-	  messagingSenderId: "1029287920151",
-	  appId: "1:1029287920151:web:7a9e0cf0f4eefce5385252"
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
     };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
 
+    // DOM elements
     const categoryName = document.getElementById("categoryName");
     const emissionFactor = document.getElementById("emissionFactor");
-    const addCategoryBtn = document.getElementById("addCategory");
+    const addCategoryBtn = document.getElementById("addCategoryBtn");
     const catMsg = document.getElementById("catMsg");
-
     const userSelect = document.getElementById("userSelect");
-    const categoryAssign = document.getElementById("categoryAssign");
-    const assignCatBtn = document.getElementById("assignCatBtn");
+    const categoryCheckboxes = document.getElementById("categoryCheckboxes");
+    const assignButton = document.getElementById("assignButton");
     const assignMsg = document.getElementById("assignMsg");
-    const dataTable = document.querySelector("#dataTable tbody");
 
     let currentUser;
-//new paragraph
-	  const userSelect = document.getElementById("userSelect");
-	const categoryCheckboxes = document.getElementById("categoryCheckboxes");
-	const assignButton = document.getElementById("assignButton");
-	const assignMsg = document.getElementById("assignMsg");
 
-const usersRef = collection(db, "users");
-const categoriesRef = collection(db, "categories");
-
-// Load all normal users (role: "user") into dropdown
-async function loadUsers() {
-  const snapshot = await getDocs(usersRef);
-  userSelect.innerHTML = "<option value=''>Select a user</option>";
-  
-  snapshot.forEach(docSnap => {
-    const data = docSnap.data();
-    if (data.role === "user") {
-      const option = document.createElement("option");
-      option.value = docSnap.id; // UID
-      option.textContent = data.email || docSnap.id;
-      userSelect.appendChild(option);
-    }
-  });
-}
-
-// Load categories as checkboxes
-async function loadCategories() {
-  const snapshot = await getDocs(categoriesRef);
-  categoryCheckboxes.innerHTML = "";
-
-  snapshot.forEach(docSnap => {
-    const data = docSnap.data();
-    const label = document.createElement("label");
-    label.innerHTML = `
-      <input type="checkbox" value="${data.name}"> ${data.name}<br>
-    `;
-    categoryCheckboxes.appendChild(label);
-  });
-}
-
-// Call these functions on page load
-loadUsers();
-loadCategories();
-
-//till here
-	  
-    // Auth check
+    // 1️⃣ Check if logged in user is admin
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
         window.location.href = "login.html";
@@ -147,108 +82,83 @@ loadCategories();
       const userDoc = await getDoc(doc(db, "users", user.uid));
 
       if (!userDoc.exists() || userDoc.data().role !== "admin") {
-        alert("Access denied. You are not an admin.");
+        alert("Access denied. You are not admin.");
         window.location.href = "dashboard.html";
         return;
       }
 
-      loadCategories();
+      // Load users and categories after confirming admin
       loadUsers();
-      loadEmissionData();
+      loadCategories();
     });
 
-    // Add new category
+    // 2️⃣ Add new category
     addCategoryBtn.addEventListener("click", async () => {
       const name = categoryName.value.trim();
       const factor = parseFloat(emissionFactor.value);
-
       if (!name || isNaN(factor)) {
-        catMsg.textContent = "Please enter valid details.";
+        catMsg.textContent = "Enter valid name and factor.";
         return;
       }
 
       await addDoc(collection(db, "categories"), {
-        name,
-        factor,
-        createdBy: currentUser.email
+        name, factor, createdBy: currentUser.email
       });
 
-      catMsg.textContent = `✅ Category '${name}' added successfully!`;
+      catMsg.textContent = `✅ Category '${name}' added successfully`;
       categoryName.value = "";
       emissionFactor.value = "";
       loadCategories();
     });
 
-    // Load categories into dropdowns
-    async function loadCategories() {
-      const snapshot = await getDocs(collection(db, "categories"));
-      categoryAssign.innerHTML = "<option value=''>-- Select Category --</option>";
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        categoryAssign.innerHTML += `<option value="${data.name}">${data.name}</option>`;
-      });
-    }
-
-    // Load users for assignment
+    // 3️⃣ Load all users into dropdown
     async function loadUsers() {
       const snapshot = await getDocs(collection(db, "users"));
-      userSelect.innerHTML = "<option value=''>-- Select User --</option>";
-      snapshot.forEach((docSnap) => {
+      userSelect.innerHTML = "<option value=''>Select a user</option>";
+      snapshot.forEach(docSnap => {
         const data = docSnap.data();
         if (data.role === "user") {
-          userSelect.innerHTML += `<option value="${docSnap.id}">${data.displayName || docSnap.id}</option>`;
+          const option = document.createElement("option");
+          option.value = docSnap.id; // UID
+          option.textContent = data.email || docSnap.id;
+          userSelect.appendChild(option);
         }
       });
     }
 
-    // Assign category to user
-    assignCatBtn.addEventListener("click", async () => {
-      const userId = userSelect.value;
-      const category = categoryAssign.value;
-      if (!userId || !category) {
-        assignMsg.textContent = "Select user and category first!";
-        return;
-      }
-	
-
-      const userRef = doc(db, "users", userId);
-      await updateDoc(userRef, {
-        assignedCategories: arrayUnion(category)
-
-		  <h3>Assign Categories to Users</h3>
-<select id="userSelect">
-  <option value="">Select a user</option>
-</select>
-<div id="categoryCheckboxes"></div>
-<button id="assignButton">Assign Categories</button>
-<p id="assignMsg"></p>
-      });
-      assignMsg.textContent = `✅ Assigned '${category}' to user successfully.`;
-    });
-
-
-	  
-
-    // Live view of all submissions
-    function loadEmissionData() {
-      onSnapshot(collection(db, "emissions"), (snapshot) => {
-        dataTable.innerHTML = "";
-        snapshot.forEach((docSnap) => {
-          const d = docSnap.data();
-          const row = `<tr>
-            <td>${d.userEmail}</td>
-            <td>${d.category}</td>
-            <td>${d.activityValue}</td>
-            <td>${d.factor}</td>
-            <td>${d.value.toFixed(2)}</td>
-          </tr>`;
-          dataTable.innerHTML += row;
-        });
+    // 4️⃣ Load all categories as checkboxes
+    async function loadCategories() {
+      const snapshot = await getDocs(collection(db, "categories"));
+      categoryCheckboxes.innerHTML = "";
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        const label = document.createElement("label");
+        label.innerHTML = `<input type="checkbox" value="${data.name}"> ${data.name}`;
+        categoryCheckboxes.appendChild(label);
       });
     }
+
+    // 5️⃣ Assign selected categories to user
+    assignButton.addEventListener("click", async () => {
+      const userId = userSelect.value;
+      if (!userId) {
+        assignMsg.textContent = "Select a user first.";
+        return;
+      }
+
+      const selectedCategories = [];
+      categoryCheckboxes.querySelectorAll("input:checked").forEach(cb => {
+        selectedCategories.push(cb.value);
+      });
+
+      if (selectedCategories.length === 0) {
+        assignMsg.textContent = "Select at least one category.";
+        return;
+      }
+
+      await updateDoc(doc(db, "users", userId), { assignedCategories: selectedCategories });
+      assignMsg.textContent = `✅ Assigned categories: ${selectedCategories.join(", ")}`;
+    });
   </script>
 </body>
 </html>
-
-
-

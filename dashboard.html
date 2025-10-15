@@ -1,122 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Carbon Platform — Dashboard</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Dashboard</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background:#f5f7fa; color:#222; }
-    header { background:#1f6feb; color:#fff; padding:14px 20px; display:flex;justify-content:space-between;align-items:center;}
-    main { padding:20px; max-width:1100px; margin:20px auto; }
-    .card { background:#fff; padding:16px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.06); margin-bottom:16px; }
-    input[type="number"], input[type="text"], select, textarea { width:100%; padding:8px; margin-top:6px; border:1px solid #ddd; border-radius:6px; }
-    button { background:#1f6feb; color:#fff; border:none; padding:10px 14px; border-radius:6px; cursor:pointer; }
-    button.secondary { background:#6b7280; }
-    .flex { display:flex; gap:12px; }
-    .col { flex:1; }
-    table { width:100%; border-collapse:collapse; margin-top:10px; }
-    th,td { padding:8px;border-bottom:1px solid #eee; text-align:left; }
-    .small { font-size:13px; color:#555; }
-    .danger { background:#ef4444; color:#fff; padding:6px 8px; border-radius:6px; }
-    .success { background:#10b981; color:#fff; padding:6px 8px; border-radius:6px; }
-    .center { text-align:center; }
+    body {
+      font-family: Arial;
+      background: #f6f7f8;
+      padding: 20px;
+    }
+    form {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      width: 300px;
+    }
+    select, input, button {
+      width: 100%;
+      margin-top: 10px;
+      padding: 8px;
+    }
   </style>
 </head>
 <body>
-  <header>
-    <div>
-      <strong>Infinite Environmental Solutions</strong>
-      <div class="small">Carbon Data Platform</div>
-    </div>
-    <div>
-      <span id="userEmail" class="small"></span>
-      <button id="logoutBtn" style="margin-left:12px;" class="secondary">Logout</button>
-    </div>
-  </header>
+  <h2>User Dashboard</h2>
+  <form id="emissionForm">
+    <label>Select Category:</label>
+    <select id="categorySelect" required>
+      <option value="">Loading categories...</option>
+    </select>
 
-  <main>
-    <div id="status" class="card small">Loading...</div>
+    <label>Enter Activity Data (e.g., litres, kWh, kg):</label>
+    <input type="number" id="activityValue" placeholder="Enter value" required />
 
-    <div id="adminPanel" style="display:none;">
-      <div class="card">
-        <h3>Admin: Emission Factors</h3>
-        <p class="small">Define emission factors (key → kg CO₂ per unit). Keys must match field keys below.</p>
-        <div class="flex">
-          <div class="col">
-            <textarea id="efJson" rows="6" placeholder='e.g. {"electricity":0.85,"car_km":0.12}'></textarea>
-            <div class="small">Paste JSON and click Save. Existing factors are loaded automatically.</div>
-          </div>
-          <div style="width:180px;">
-            <button id="saveEfBtn">Save Factors</button>
-            <div style="height:8px"></div>
-            <button id="loadEfBtn" class="secondary">Reload Factors</button>
-          </div>
-        </div>
-      </div>
+    <button type="submit">Submit Data</button>
+  </form>
 
-      <div class="card">
-        <h3>Admin: Categories & Fields</h3>
-        <p class="small">Create category documents. Category structure: {name, fields: [{key,label,unit}], description}</p>
-        <textarea id="categoryJson" rows="6" placeholder='e.g. {"name":"Energy","fields":[{"key":"electricity","label":"Electricity (kWh/month)","unit":"kWh"},{"key":"diesel","label":"Diesel (liters)","unit":"L"}]}'></textarea>
-        <div style="margin-top:8px;">
-          <button id="createCategoryBtn">Create Category</button>
-          <button id="loadCategoriesBtn" class="secondary">Reload Categories</button>
-        </div>
-        <div id="categoryList" style="margin-top:12px;"></div>
-      </div>
-
-      <div class="card">
-        <h3>Admin: Assign Categories to Users</h3>
-        <p class="small">Add a document in users/{uid} with role:"user" and assignedCategories:[categoryId,...]</p>
-        <div class="flex">
-          <div class="col">
-            <input id="assignUid" placeholder="User UID (from Auth -> Users list)" />
-            <input id="assignCatId" placeholder="Category ID to assign" />
-          </div>
-          <div style="width:180px;">
-            <button id="assignCatBtn">Assign</button>
-            <button id="viewUserBtn" class="secondary">View User Doc</button>
-          </div>
-        </div>
-        <div id="assignResult" class="small"></div>
-      </div>
-
-      <div class="card">
-        <h3>Admin: View & Export Submissions</h3>
-        <div>
-          <button id="loadAllSubmissions">Load All Submissions</button>
-          <button id="exportCsvBtn" class="secondary">Export CSV</button>
-          <div id="allSubs" style="margin-top:12px;"></div>
-        </div>
-      </div>
-    </div>
-
-    <div id="userArea" style="display:none;">
-      <div class="card">
-        <h3>Your Assigned Categories</h3>
-        <div id="assignedCategories" class="small"></div>
-      </div>
-
-      <div id="formArea" class="card" style="display:none;">
-        <h3>Fill Data for <span id="formCategoryName"></span></h3>
-        <form id="dataForm">
-          <div id="formFields"></div>
-          <div style="margin-top:12px;" class="flex">
-            <button type="button" id="submitData">Submit Data</button>
-            <button type="button" id="saveDraft" class="secondary">Save Draft</button>
-          </div>
-        </form>
-      </div>
-
-      <div class="card">
-        <h3>Your Past Submissions</h3>
-        <div id="pastSubmissions" class="small">Loading...</div>
-      </div>
-    </div>
-  </main>
+  <h3>Your Submitted Data:</h3>
+  <table border="1" id="dataTable" style="margin-top:10px; border-collapse: collapse;">
+    <thead>
+      <tr>
+        <th>Category</th>
+        <th>Activity</th>
+        <th>Emission Factor</th>
+        <th>Total Emissions</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
   <script type="module">
-    // ====== INSERT YOUR FIREBASE CONFIG HERE ======
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, serverTimestamp, onSnapshot } 
+      from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+
     const firebaseConfig = {
 	  apiKey: "AIzaSyDCyXTdzGqevLfj754uaU-6jrEiXnUx_mQ",
 	  authDomain: "carbon-calculator-infinite.firebaseapp.com",
@@ -125,402 +67,72 @@
 	  messagingSenderId: "1029287920151",
 	  appId: "1:1029287920151:web:7a9e0cf0f4eefce5385252"
     };
-    // ===============================================
-
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
-    import {
-      getAuth, onAuthStateChanged, signOut
-    } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
-    import {
-      getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, collection, getDocs, query, where, orderBy, serverTimestamp
-    } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    // UI elements
-    const statusDiv = document.getElementById('status');
-    const userEmailSpan = document.getElementById('userEmail');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const adminPanel = document.getElementById('adminPanel');
-    const userArea = document.getElementById('userArea');
+    const categorySelect = document.getElementById("categorySelect");
+    const emissionForm = document.getElementById("emissionForm");
+    const dataTable = document.querySelector("#dataTable tbody");
 
-    // Admin elements
-    const efJson = document.getElementById('efJson');
-    const saveEfBtn = document.getElementById('saveEfBtn');
-    const loadEfBtn = document.getElementById('loadEfBtn');
+    let categories = {};
 
-    const categoryJson = document.getElementById('categoryJson');
-    const createCategoryBtn = document.getElementById('createCategoryBtn');
-    const loadCategoriesBtn = document.getElementById('loadCategoriesBtn');
-    const categoryList = document.getElementById('categoryList');
-
-    const assignUid = document.getElementById('assignUid');
-    const assignCatId = document.getElementById('assignCatId');
-    const assignCatBtn = document.getElementById('assignCatBtn');
-    const viewUserBtn = document.getElementById('viewUserBtn');
-    const assignResult = document.getElementById('assignResult');
-
-    const loadAllSubmissionsBtn = document.getElementById('loadAllSubmissions');
-    const allSubsDiv = document.getElementById('allSubs');
-    const exportCsvBtn = document.getElementById('exportCsvBtn');
-
-    // User elements
-    const assignedCategoriesDiv = document.getElementById('assignedCategories');
-    const formArea = document.getElementById('formArea');
-    const formCategoryName = document.getElementById('formCategoryName');
-    const formFieldsDiv = document.getElementById('formFields');
-    const submitDataBtn = document.getElementById('submitData');
-    const saveDraftBtn = document.getElementById('saveDraft');
-    const pastSubmissionsDiv = document.getElementById('pastSubmissions');
-
-    let currentUser = null;
-    let emissionFactors = {};            // {key: factor}
-    let categoriesCache = {};            // categoryId -> categoryDoc
-    let currentCategoryId = null;
-
-    // Auth state
-    onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        // not logged in — redirect to login
-        window.location.href = "login.html";
-        return;
-      }
-      currentUser = user;
-      userEmailSpan.textContent = user.email;
-      statusDiv.textContent = "Checking user role and loading data...";
-      await initializeForUser(user.uid);
-    });
-
-    logoutBtn.addEventListener('click', async () => {
-      await signOut(auth);
-      window.location.href = "login.html";
-    });
-
-    // Initialize: load user doc, emission factors, categories, and show proper UI
-    async function initializeForUser(uid) {
-      try {
-        // load emission factors
-        await loadEmissionFactors();
-
-        // load user doc from "users/{uid}"
-        const userDocRef = doc(db, "users", uid);
-        const userSnap = await getDoc(userDocRef);
-        let userData = null;
-        if (userSnap.exists()) {
-          userData = userSnap.data();
-        } else {
-          // default user doc (role: user). Admin must create admin docs manually.
-          userData = { role: "user", assignedCategories: [] };
-          // create if doesn't exist (optional)
-          await setDoc(userDocRef, userData);
-        }
-
-        if (userData.role === "admin") {
-          adminPanel.style.display = "block";
-          userArea.style.display = "none";
-          statusDiv.textContent = "You are an Admin. Use admin panel to manage categories, factors and view submissions.";
-          await loadAllCategories();
-          await loadAllSubmissions(); // preload
-        } else {
-          adminPanel.style.display = "none";
-          userArea.style.display = "block";
-          statusDiv.textContent = "Welcome. Loading your assigned categories...";
-          await loadAllCategories(); // also load categories to cache
-          await showAssignedCategories(userData.assignedCategories || []);
-          await loadPastSubmissionsForUser(uid);
-        }
-      } catch (err) {
-        console.error(err);
-        statusDiv.textContent = "Error initializing: " + err.message;
-      }
-    }
-
-    // -------------------------
-    // Emission factors handling
-    // -------------------------
-    async function loadEmissionFactors() {
-      const efRef = doc(db, "config", "emission_factors");
-      const snap = await getDoc(efRef);
-      if (snap.exists()) {
-        emissionFactors = snap.data().factors || {};
-      } else {
-        emissionFactors = {}; // empty
-      }
-      efJson.value = JSON.stringify(emissionFactors, null, 2);
-    }
-
-    saveEfBtn.addEventListener('click', async () => {
-      try {
-        const parsed = JSON.parse(efJson.value);
-        await setDoc(doc(db, "config", "emission_factors"), { factors: parsed });
-        emissionFactors = parsed;
-        alert("Saved emission factors.");
-      } catch (err) {
-        alert("Invalid JSON or save error: " + err.message);
-      }
-    });
-
-    loadEfBtn.addEventListener('click', loadEmissionFactors);
-
-    // -------------------------
-    // Categories handling (admin)
-    // -------------------------
-    async function loadAllCategories() {
-      categoriesCache = {};
-      const colsnap = await getDocs(collection(db, "categories"));
-      let html = "";
-      colsnap.forEach(docSnap => {
-        categoriesCache[docSnap.id] = docSnap.data();
-      });
-      renderCategoryList();
-    }
-
-    function renderCategoryList() {
-      let html = "<table><thead><tr><th>ID</th><th>Name</th><th>Fields</th></tr></thead><tbody>";
-      for (const id in categoriesCache) {
-        const c = categoriesCache[id];
-        html += `<tr><td><code>${id}</code></td><td>${c.name}</td><td>${(c.fields||[]).map(f=>f.key+":"+f.label).join(", ")}</td></tr>`;
-      }
-      html += "</tbody></table>";
-      categoryList.innerHTML = html;
-    }
-
-    createCategoryBtn.addEventListener('click', async () => {
-      try {
-        const parsed = JSON.parse(categoryJson.value);
-        // create category doc (auto id)
-        const newDoc = await addDoc(collection(db, "categories"), parsed);
-        await loadAllCategories();
-        alert("Category created: " + newDoc.id);
-      } catch (err) {
-        alert("Invalid JSON or create error: " + err.message);
-      }
-    });
-
-    loadCategoriesBtn.addEventListener('click', loadAllCategories);
-
-    // -------------------------
-    // Assign category to user
-    // -------------------------
-    assignCatBtn.addEventListener('click', async () => {
-      const uid = assignUid.value.trim();
-      const cat = assignCatId.value.trim();
-      if (!uid || !cat) return assignResult.textContent = "Enter UID and Category ID.";
-      try {
-        const userRef = doc(db, "users", uid);
-        const userSnap = await getDoc(userRef);
-        let userData = { role: "user", assignedCategories: [] };
-        if (userSnap.exists()) userData = userSnap.data();
-        const assigned = new Set(userData.assignedCategories || []);
-        assigned.add(cat);
-        await setDoc(userRef, { ...userData, assignedCategories: Array.from(assigned) });
-        assignResult.textContent = `Assigned category ${cat} to ${uid}`;
-      } catch (err) {
-        assignResult.textContent = "Assign error: " + err.message;
-      }
-    });
-
-    viewUserBtn.addEventListener('click', async () => {
-      const uid = assignUid.value.trim();
-      if (!uid) return assignResult.textContent = "Enter UID.";
-      const snap = await getDoc(doc(db, "users", uid));
-      assignResult.textContent = snap.exists() ? JSON.stringify(snap.data()) : "No user doc found.";
-    });
-
-    // -------------------------
-    // Admin: Submissions view & export
-    // -------------------------
-    async function loadAllSubmissions() {
-      allSubsDiv.innerHTML = "Loading...";
-      const snaps = await getDocs(collection(db, "submissions"));
-      const arr = [];
-      snaps.forEach(s => {
-        arr.push({ id: s.id, ...s.data() });
-      });
-      renderAllSubmissions(arr);
-      return arr;
-    }
-
-    loadAllSubmissionsBtn.addEventListener('click', loadAllSubmissions);
-
-    function renderAllSubmissions(arr) {
-      if (!arr.length) { allSubsDiv.innerHTML = "No submissions yet."; return; }
-      let html = `<table><thead><tr><th>ID</th><th>User</th><th>Category</th><th>Emissions(kgCO2)</th><th>Status</th><th>Created</th></tr></thead><tbody>`;
-      arr.forEach(r => {
-        html += `<tr><td><code>${r.id}</code></td><td>${r.userId || ""}</td><td>${r.categoryId}</td><td>${(r.calculatedEmissions || 0).toFixed(2)}</td><td>${r.status}</td><td>${r.createdAt? new Date(r.createdAt.seconds*1000).toLocaleString() : ''}</td></tr>`;
-      });
-      html += `</tbody></table>`;
-      allSubsDiv.innerHTML = html;
-    }
-
-    exportCsvBtn.addEventListener('click', async () => {
-      const arr = await loadAllSubmissions();
-      if (!arr.length) return alert("No submissions to export.");
-      // Convert to CSV
-      const headers = ["id","userId","categoryId","calculatedEmissions","status","createdAt","data"];
-      const rows = arr.map(a => {
-        const created = a.createdAt ? new Date(a.createdAt.seconds*1000).toISOString() : "";
-        return headers.map(h => {
-          if (h === "data") return JSON.stringify(a.data || {});
-          return (a[h] !== undefined) ? String(a[h]) : "";
-        }).join(",");
-      });
-      const csv = [headers.join(","), ...rows].join("\n");
-      const blob = new Blob([csv], {type: "text/csv"});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `submissions_export_${Date.now()}.csv`; document.body.appendChild(a); a.click(); a.remove();
-    });
-
-    // -------------------------
-    // User: Assigned categories & form rendering
-    // -------------------------
-    async function showAssignedCategories(assignedCategories) {
-      if (!assignedCategories || assignedCategories.length === 0) {
-        assignedCategoriesDiv.innerHTML = "<div>No categories assigned yet. Contact admin.</div>";
-        formArea.style.display = "none";
-        return;
-      }
-      let html = "<ul>";
-      for (const catId of assignedCategories) {
-        // ensure we have cat in cache
-        if (!categoriesCache[catId]) {
-          // try to load
-          const snap = await getDoc(doc(db, "categories", catId));
-          if (snap.exists()) categoriesCache[catId] = snap.data();
-          else categoriesCache[catId] = { name: "(Missing)", fields: [] };
-        }
-        html += `<li><strong>${categoriesCache[catId].name}</strong> — <code>${catId}</code> 
-                 <button data-cat="${catId}" style="margin-left:10px;">Fill Form</button></li>`;
-      }
-      html += "</ul>";
-      assignedCategoriesDiv.innerHTML = html;
-
-      // attach handlers
-      assignedCategoriesDiv.querySelectorAll("button[data-cat]").forEach(btn => {
-        btn.addEventListener('click', (ev) => {
-          const cat = ev.target.getAttribute('data-cat');
-          openFormForCategory(cat);
-        });
+    // Load categories
+    async function loadCategories() {
+      const snapshot = await getDocs(collection(db, "categories"));
+      categorySelect.innerHTML = `<option value="">-- Select Category --</option>`;
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        categories[data.name] = data.factor;
+        categorySelect.innerHTML += `<option value="${data.name}">${data.name}</option>`;
       });
     }
 
-    function openFormForCategory(catId) {
-      currentCategoryId = catId;
-      const cat = categoriesCache[catId];
-      if (!cat) { alert("Category not found"); return; }
-      formCategoryName.textContent = cat.name;
-      formFieldsDiv.innerHTML = "";
-      (cat.fields || []).forEach(f => {
-        const id = `field_${f.key}`;
-        const wrapper = document.createElement('div');
-        wrapper.style.marginTop = '8px';
-        wrapper.innerHTML = `<label>${f.label} <span class="small">(${f.unit || ''})</span></label>
-                             <input type="number" step="any" min="0" id="${id}" data-key="${f.key}" />`;
-        formFieldsDiv.appendChild(wrapper);
-      });
-      formArea.style.display = "block";
-      window.scrollTo({ top: formArea.offsetTop-12, behavior: 'smooth' });
-    }
+    // Submit emission data
+    emissionForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const category = categorySelect.value;
+      const activityValue = parseFloat(document.getElementById("activityValue").value);
+      const factor = categories[category] || 0;
+      const total = activityValue * factor;
+      const user = auth.currentUser;
 
-    // submit handlers: calculate using emissionFactors and save to submissions
-    submitDataBtn.addEventListener('click', async () => {
-      if (!currentCategoryId) return alert("Open a category form first.");
-      const cat = categoriesCache[currentCategoryId];
-      const data = {};
-      (cat.fields || []).forEach(f => {
-        const el = document.getElementById(`field_${f.key}`);
-        data[f.key] = el && el.value ? parseFloat(el.value) : 0;
-      });
-      const calculated = calculateEmissions(data);
-      // save submission
-      const payload = {
-        userId: currentUser.uid,
-        userEmail: currentUser.email,
-        categoryId: currentCategoryId,
-        categoryName: cat.name,
-        data,
-        calculatedEmissions: calculated,
-        status: "pending",
+      if (!user) return alert("Not logged in!");
+
+      await addDoc(collection(db, "emissions"), {
+        userEmail: user.email,
+        category,
+        value: total,
+        factor,
+        activityValue,
         createdAt: serverTimestamp()
-      };
-      await addDoc(collection(db, "submissions"), payload);
-      alert("Data submitted. Calculated emissions: " + calculated.toFixed(2) + " kg CO₂");
-      // reload user's past submissions
-      await loadPastSubmissionsForUser(currentUser.uid);
+      });
+
+      alert("Data submitted successfully!");
+      emissionForm.reset();
     });
 
-    saveDraftBtn.addEventListener('click', async () => {
-      if (!currentCategoryId) return alert("Open a category form first.");
-      const cat = categoriesCache[currentCategoryId];
-      const data = {};
-      (cat.fields || []).forEach(f => {
-        const el = document.getElementById(`field_${f.key}`);
-        data[f.key] = el && el.value ? parseFloat(el.value) : 0;
+    // Show live data
+    onSnapshot(collection(db, "emissions"), (snapshot) => {
+      dataTable.innerHTML = "";
+      snapshot.forEach((doc) => {
+        const d = doc.data();
+        const row = `<tr>
+          <td>${d.category}</td>
+          <td>${d.activityValue}</td>
+          <td>${d.factor}</td>
+          <td>${d.value.toFixed(2)}</td>
+        </tr>`;
+        dataTable.innerHTML += row;
       });
-      const payload = {
-        userId: currentUser.uid,
-        userEmail: currentUser.email,
-        categoryId: currentCategoryId,
-        categoryName: cat.name,
-        data,
-        calculatedEmissions: null,
-        status: "draft",
-        createdAt: serverTimestamp()
-      };
-      await addDoc(collection(db, "submissions"), payload);
-      alert("Draft saved.");
-      await loadPastSubmissionsForUser(currentUser.uid);
     });
 
-    function calculateEmissions(dataObj) {
-      // simple sum of data[key] * emissionFactors[key], ignoring missing
-      let total = 0;
-      for (const key in dataObj) {
-        const val = Number(dataObj[key]) || 0;
-        const factor = Number(emissionFactors[key]) || 0;
-        total += val * factor;
-      }
-      return total;
-    }
-
-    // -------------------------
-    // Load past submissions for current user
-    // -------------------------
-    async function loadPastSubmissionsForUser(uid) {
-      pastSubmissionsDiv.innerHTML = "Loading...";
-      // naive: load all submissions and filter by uid (sufficient small scale). For scale, use queries.
-      const snaps = await getDocs(collection(db, "submissions"));
-      const arr = [];
-      snaps.forEach(s => {
-        const d = s.data();
-        if (d.userId === uid) arr.push({ id: s.id, ...d });
-      });
-      if (!arr.length) { pastSubmissionsDiv.innerHTML = "No submissions yet."; return; }
-      let html = `<table><thead><tr><th>ID</th><th>Category</th><th>Emissions</th><th>Status</th><th>Created</th></tr></thead><tbody>`;
-      arr.sort((a,b)=> (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
-      arr.forEach(r => {
-        html += `<tr><td><code>${r.id}</code></td><td>${r.categoryName}</td><td>${(r.calculatedEmissions||0).toFixed(2)}</td><td>${r.status}</td><td>${r.createdAt? new Date(r.createdAt.seconds*1000).toLocaleString():''}</td></tr>`;
-      });
-      html += `</tbody></table>`;
-      pastSubmissionsDiv.innerHTML = html;
-    }
-
-    // -------------------------
-    // initial load for admin: automatically load categories if admin
-    // -------------------------
-    // done in initializeForUser
-
-    // -------------------------
-    // Utility: loadAllSubmissions on start for admin
-    // -------------------------
-    async function loadAllSubmissionsHandler() {
-      const arr = await loadAllSubmissions();
-      return arr;
-    }
-
+    // Auth check
+    onAuthStateChanged(auth, (user) => {
+      if (!user) window.location.href = "login.html";
+      else loadCategories();
+    });
   </script>
 </body>
 </html>

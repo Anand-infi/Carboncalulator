@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard | Carbon Platform</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background: #f8f9fa;
+    }
+    header {
+      background: #0d6efd;
+      color: white;
+      padding: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    main {
+      padding: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background: white;
+      border-radius: 8px;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: left;
+    }
+    th {
+      background: #e9ecef;
+    }
+    h2 {
+      color: #333;
+    }
+    form {
+      margin-bottom: 20px;
+      background: #fff;
+      padding: 15px;
+      border-radius: 8px;
+    }
+    input {
+      padding: 8px;
+      margin-right: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    button {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 5px;
+      background: #0d6efd;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0b5ed7;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h3>Admin Dashboard</h3>
+    <button id="logoutBtn">Logout</button>
+  </header>
+
+  <main>
+    <h2>Manage Categories</h2>
+    <form id="categoryForm">
+      <input type="text" id="categoryName" placeholder="Category Name" required>
+      <input type="number" id="categoryFactor" placeholder="Emission Factor" step="0.01" required>
+      <button type="submit">Add Category</button>
+    </form>
+
+    <table id="categoriesTable">
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Emission Factor</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>All User Data</h2>
+    <button id="downloadCSV">Download CSV</button>
+    <table id="dataTable">
+      <thead>
+        <tr>
+          <th>User Email</th>
+          <th>Category</th>
+          <th>Value (tCO₂e)</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    import { getFirestore, collection, addDoc, getDocs, serverTimestamp, onSnapshot } 
+      from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+
+    const firebaseConfig = {
+	  apiKey: "AIzaSyDCyXTdzGqevLfj754uaU-6jrEiXnUx_mQ",
+	  authDomain: "carbon-calculator-infinite.firebaseapp.com",
+	  projectId: "carbon-calculator-infinite",
+	  storageBucket: "carbon-calculator-infinite.firebasestorage.app",
+	  messagingSenderId: "1029287920151",
+	  appId: "1:1029287920151:web:7a9e0cf0f4eefce5385252"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const logoutBtn = document.getElementById("logoutBtn");
+    const categoryForm = document.getElementById("categoryForm");
+    const categoriesTable = document.querySelector("#categoriesTable tbody");
+    const dataTable = document.querySelector("#dataTable tbody");
+    const downloadCSV = document.getElementById("downloadCSV");
+
+    // 🧩 Logout
+    logoutBtn.addEventListener("click", async () => {
+      await signOut(auth);
+      window.location.href = "login.html";
+    });
+
+    // 🧩 Check if admin is logged in
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        window.location.href = "login.html";
+      }
+    });
+
+    // 🧩 Add Category
+    categoryForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = document.getElementById("categoryName").value.trim();
+      const factor = parseFloat(document.getElementById("categoryFactor").value);
+      if (!name || isNaN(factor)) return alert("Enter valid values.");
+
+      await addDoc(collection(db, "categories"), {
+        name, factor, createdAt: serverTimestamp()
+      });
+      alert("Category added!");
+      categoryForm.reset();
+    });
+
+    // 🧩 Load Categories Live
+    onSnapshot(collection(db, "categories"), (snapshot) => {
+      categoriesTable.innerHTML = "";
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const row = `<tr><td>${data.name}</td><td>${data.factor}</td></tr>`;
+        categoriesTable.innerHTML += row;
+      });
+    });
+
+    // 🧩 Load Emission Data Live
+    onSnapshot(collection(db, "emissions"), (snapshot) => {
+      dataTable.innerHTML = "";
+      snapshot.forEach((doc) => {
+        const d = doc.data();
+        const date = d.createdAt?.toDate().toLocaleString() || "";
+        dataTable.innerHTML += `
+          <tr>
+            <td>${d.userEmail}</td>
+            <td>${d.category}</td>
+            <td>${d.value}</td>
+            <td>${date}</td>
+          </tr>`;
+      });
+    });
+
+    // 🧩 Download CSV
+    downloadCSV.addEventListener("click", async () => {
+      const querySnapshot = await getDocs(collection(db, "emissions"));
+      let csv = "User Email,Category,Value (tCO2e),Date\n";
+      querySnapshot.forEach((doc) => {
+        const d = doc.data();
+        const date = d.createdAt?.toDate().toLocaleString() || "";
+        csv += `${d.userEmail},${d.category},${d.value},${date}\n`;
+      });
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "emissions_data.csv";
+      a.click();
+    });
+  </script>
+</body>
+</html>

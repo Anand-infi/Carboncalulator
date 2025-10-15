@@ -164,20 +164,19 @@
         assignMsg.textContent = "Select user and category first!";
         return;
       }
-			  <h2>Assign Categories to Users</h2>
-<div id="assign-section">
-  <select id="userSelect">
-    <option value="">Select a user</option>
-  </select>
-
-  <div id="categoryCheckboxes"></div>
-
-  <button id="assignButton">Assign Categories</button>
-</div>
+	
 
       const userRef = doc(db, "users", userId);
       await updateDoc(userRef, {
         assignedCategories: arrayUnion(category)
+
+		  <h3>Assign Categories to Users</h3>
+<select id="userSelect">
+  <option value="">Select a user</option>
+</select>
+<div id="categoryCheckboxes"></div>
+<button id="assignButton">Assign Categories</button>
+<p id="assignMsg"></p>
       });
       assignMsg.textContent = `✅ Assigned '${category}' to user successfully.`;
     });
@@ -205,4 +204,5 @@
   </script>
 </body>
 </html>
+
 

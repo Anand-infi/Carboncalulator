@@ -32,7 +32,9 @@
   <!-- Section 2: Assign Categories to Users -->
   <div class="card">
     <h3>Assign Categories to Users</h3>
-    <select id="userSelect"><option value="">Select a user</option></select>
+    <select id="userSelect">
+      <option value="">Select a user</option>
+    </select>
     <div id="categoryCheckboxes"></div>
     <button id="assignButton">Assign Categories</button>
     <p id="assignMsg"></p>
@@ -41,11 +43,9 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
-    import { 
-      getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, arrayUnion 
-    } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, addDoc, doc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
 
-    // 🔧 Firebase configuration (replace with your project values)
+    // 🔧 Firebase configuration — REPLACE WITH YOUR VALUES
     const firebaseConfig = {
 	  apiKey: "AIzaSyDCyXTdzGqevLfj754uaU-6jrEiXnUx_mQ",
 	  authDomain: "carbon-calculator-infinite.firebaseapp.com",
@@ -59,7 +59,6 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    // DOM elements
     const categoryName = document.getElementById("categoryName");
     const emissionFactor = document.getElementById("emissionFactor");
     const addCategoryBtn = document.getElementById("addCategoryBtn");
@@ -71,106 +70,102 @@
 
     let currentUser;
 
-    // 1️⃣ Check if logged in user is admin
-    onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        window.location.href = "login.html";
-        return;
-      }
+    window.addEventListener("DOMContentLoaded", () => {
 
-      currentUser = user;
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-
-      if (!userDoc.exists() || userDoc.data().role !== "admin") {
-        alert("Access denied. You are not admin.");
-        window.location.href = "dashboard.html";
-        return;
-      }
-
-      // Load users and categories after confirming admin
-      loadUsers();
-      loadCategories();
-    });
-
-    // 2️⃣ Add new category
-    addCategoryBtn.addEventListener("click", async () => {
-      const name = categoryName.value.trim();
-      const factor = parseFloat(emissionFactor.value);
-      if (!name || isNaN(factor)) {
-        catMsg.textContent = "Enter valid name and factor.";
-        return;
-      }
-
-      await addDoc(collection(db, "categories"), {
-        name, factor, createdBy: currentUser.email
-      });
-
-      catMsg.textContent = `✅ Category '${name}' added successfully`;
-      categoryName.value = "";
-      emissionFactor.value = "";
-      loadCategories();
-    });
-
-    // 3️⃣ Load all users into dropdown
-    async function loadUsers() {
-      const snapshot = await getDocs(collection(db, "users"));
-      userSelect.innerHTML = "<option value=''>Select a user</option>";
-      snapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        if (data.role === "user") {
-          const option = document.createElement("option");
-          option.value = docSnap.id; // UID
-          option.textContent = data.email || docSnap.id;
-          userSelect.appendChild(option);
-			//new addition
-			console.log("Loading users...");
-snapshot.forEach(docSnap => {
-  const data = docSnap.data();
-  console.log("Found user:", data.email, "role:", data.role); // debug
-  if (data.role === "user") {
-    const option = document.createElement("option");
-    option.value = docSnap.id;
-    option.textContent = data.email || docSnap.id;
-    userSelect.appendChild(option);
-	  //yaha tak
+      // 1️⃣ Check admin login
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          window.location.href = "login.html";
+          return;
         }
-      });
-    }
 
-    // 4️⃣ Load all categories as checkboxes
-    async function loadCategories() {
-      const snapshot = await getDocs(collection(db, "categories"));
-      categoryCheckboxes.innerHTML = "";
-      snapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        const label = document.createElement("label");
-        label.innerHTML = `<input type="checkbox" value="${data.name}"> ${data.name}`;
-        categoryCheckboxes.appendChild(label);
-      });
-    }
+        currentUser = user;
+        const userDoc = await getDoc(doc(db, "users", user.uid));
 
-    // 5️⃣ Assign selected categories to user
-    assignButton.addEventListener("click", async () => {
-      const userId = userSelect.value;
-      if (!userId) {
-        assignMsg.textContent = "Select a user first.";
-        return;
+        if (!userDoc.exists() || userDoc.data().role !== "admin") {
+          alert("Access denied. You are not admin.");
+          window.location.href = "dashboard.html";
+          return;
+        }
+
+        // Load users and categories
+        loadUsers();
+        loadCategories();
+      });
+
+      // 2️⃣ Add new category
+      addCategoryBtn.addEventListener("click", async () => {
+        const name = categoryName.value.trim();
+        const factor = parseFloat(emissionFactor.value);
+        if (!name || isNaN(factor)) {
+          catMsg.textContent = "Enter valid name and factor.";
+          return;
+        }
+
+        await addDoc(collection(db, "categories"), {
+          name, factor, createdBy: currentUser.email
+        });
+
+        catMsg.textContent = `✅ Category '${name}' added successfully`;
+        categoryName.value = "";
+        emissionFactor.value = "";
+        loadCategories();
+      });
+
+      // 3️⃣ Load users dynamically
+      async function loadUsers() {
+        onSnapshot(collection(db, "users"), (snapshot) => {
+          userSelect.innerHTML = "<option value=''>Select a user</option>";
+          snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            console.log("Loading user:", data.email, "role:", data.role); // debug
+            if (data.role === "user") {
+              const option = document.createElement("option");
+              option.value = docSnap.id;
+              option.textContent = data.email || docSnap.id;
+              userSelect.appendChild(option);
+            }
+          });
+        });
       }
 
-      const selectedCategories = [];
-      categoryCheckboxes.querySelectorAll("input:checked").forEach(cb => {
-        selectedCategories.push(cb.value);
-      });
-
-      if (selectedCategories.length === 0) {
-        assignMsg.textContent = "Select at least one category.";
-        return;
+      // 4️⃣ Load categories dynamically
+      async function loadCategories() {
+        onSnapshot(collection(db, "categories"), (snapshot) => {
+          categoryCheckboxes.innerHTML = "";
+          snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            const label = document.createElement("label");
+            label.innerHTML = `<input type="checkbox" value="${data.name}"> ${data.name}`;
+            categoryCheckboxes.appendChild(label);
+            console.log("Loading category:", data.name); // debug
+          });
+        });
       }
 
-      await updateDoc(doc(db, "users", userId), { assignedCategories: selectedCategories });
-      assignMsg.textContent = `✅ Assigned categories: ${selectedCategories.join(", ")}`;
-    });
+      // 5️⃣ Assign selected categories to user
+      assignButton.addEventListener("click", async () => {
+        const userId = userSelect.value;
+        if (!userId) {
+          assignMsg.textContent = "Select a user first.";
+          return;
+        }
+
+        const selectedCategories = [];
+        categoryCheckboxes.querySelectorAll("input:checked").forEach(cb => {
+          selectedCategories.push(cb.value);
+        });
+
+        if (selectedCategories.length === 0) {
+          assignMsg.textContent = "Select at least one category.";
+          return;
+        }
+
+        await updateDoc(doc(db, "users", userId), { assignedCategories: selectedCategories });
+        assignMsg.textContent = `✅ Assigned categories: ${selectedCategories.join(", ")}`;
+      });
+
+    }); // DOMContentLoaded
   </script>
 </body>
 </html>
-

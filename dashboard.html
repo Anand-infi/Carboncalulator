@@ -1,138 +1,299 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>User Dashboard</title>
-  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js"></script>
+  <meta charset="utf-8" />
+  <title>Carbon Platform — Dashboard (diagnostic)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body {
-      font-family: Arial;
-      background: #f6f7f8;
-      padding: 20px;
-    }
-    form {
-      background: white;
-      padding: 15px;
-      border-radius: 8px;
-      width: 300px;
-    }
-    select, input, button {
-      width: 100%;
-      margin-top: 10px;
-      padding: 8px;
-    }
+    body{font-family:Arial,Helvetica,sans-serif;background:#f5f7fa;margin:0}
+    header{background:#1f6feb;color:#fff;padding:12px 18px;display:flex;justify-content:space-between;align-items:center}
+    main{max-width:1000px;margin:20px auto;padding:18px}
+    .card{background:#fff;padding:16px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:14px}
+    .small{font-size:13px;color:#555}
+    label{display:block;margin-top:8px}
+    input,select,textarea{width:100%;padding:8px;margin-top:6px;border:1px solid #ddd;border-radius:6px}
+    button{background:#1f6feb;color:#fff;border:none;padding:10px 12px;border-radius:6px;cursor:pointer}
+    .muted{color:#777}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;border-bottom:1px solid #eee;text-align:left}
+    .center{text-align:center}
+    .error{color:#b91c1c}
   </style>
 </head>
 <body>
-  <h2>User Dashboard</h2>
-  <form id="emissionForm">
-    <label>Select Category:</label>
-    <select id="categorySelect" required>
-      <option value="">Loading categories...</option>
-    </select>
+  <header>
+    <div><strong>Infinite Environmental Solutions</strong><div class="small muted">Carbon Data Platform</div></div>
+    <div>
+      <span id="userEmail" class="small"></span>
+      <button id="logoutBtn" style="margin-left:12px">Logout</button>
+    </div>
+  </header>
 
-    <label>Enter Activity Data (e.g., litres, kWh, kg):</label>
-    <input type="number" id="activityValue" placeholder="Enter value" required />
+  <main>
+    <div id="status" class="card small">Initializing...</div>
 
-    <button type="submit">Submit Data</button>
-  </form>
+    <div id="adminUI" style="display:none;" class="card">
+      <h3>Admin controls</h3>
+      <div class="small">You are seeing Admin UI because your Firestore user doc has <code>role: "admin"</code>.</div>
+      <div style="margin-top:12px">
+        <label>Create category (name & factor)</label>
+        <input id="catName" placeholder="Category name (eg Transport)">
+        <input id="catFactor" placeholder="Emission factor (kg CO₂ per unit)">
+        <div style="margin-top:8px"><button id="addCatBtn">Create category</button></div>
+      </div>
 
-  <h3>Your Submitted Data:</h3>
-  <table border="1" id="dataTable" style="margin-top:10px; border-collapse: collapse;">
-    <thead>
-      <tr>
-        <th>Category</th>
-        <th>Activity</th>
-        <th>Emission Factor</th>
-        <th>Total Emissions</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+      <h4 style="margin-top:16px">Categories (live)</h4>
+      <div id="catList" class="small"></div>
+
+      <h4 style="margin-top:16px">All submissions</h4>
+      <div id="allSubmissions" class="small"></div>
+      <div style="margin-top:8px"><button id="exportAllBtn">Export CSV</button></div>
+    </div>
+
+    <div id="userUI" style="display:none;" class="card">
+      <h3>User area</h3>
+      <div id="assignedInfo" class="small muted"></div>
+
+      <form id="userForm" style="margin-top:12px">
+        <label>Select category</label>
+        <select id="categorySelect"><option>Loading...</option></select>
+        <label>Enter activity amount (unit depends on category)</label>
+        <input id="activityValue" type="number" step="any" placeholder="e.g. 100">
+        <div style="margin-top:10px"><button id="submitBtn" type="button">Submit</button></div>
+      </form>
+
+      <h4 style="margin-top:16px">Your submissions</h4>
+      <div id="yourSubs" class="small">No data yet.</div>
+    </div>
+
+    <div id="diagnostics" class="card small">
+      <h4>Diagnostics (console logs also)</h4>
+      <ul>
+        <li id="diagAuth">Auth: -</li>
+        <li id="diagUserDoc">User doc: -</li>
+        <li id="diagCategories">Categories loaded: -</li>
+      </ul>
+      <div class="muted">Open browser Console (F12 → Console) to see more logs and errors.</div>
+    </div>
+  </main>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
-    import { getFirestore, collection, addDoc, getDocs, serverTimestamp, onSnapshot } 
-      from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
-
+    // ===== Replace with your Firebase config =====
     const firebaseConfig = {
 	  apiKey: "AIzaSyDCyXTdzGqevLfj754uaU-6jrEiXnUx_mQ",
-	  authDomain: "carbon-calculator-infinite.firebaseapp.com",
+  	  authDomain: "carbon-calculator-infinite.firebaseapp.com",
 	  projectId: "carbon-calculator-infinite",
 	  storageBucket: "carbon-calculator-infinite.firebasestorage.app",
 	  messagingSenderId: "1029287920151",
 	  appId: "1:1029287920151:web:7a9e0cf0f4eefce5385252"
     };
+    // ============================================
+
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    import {
+      getFirestore, collection, addDoc, getDocs, doc, getDoc, query, where, onSnapshot, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    const categorySelect = document.getElementById("categorySelect");
-    const emissionForm = document.getElementById("emissionForm");
-    const dataTable = document.querySelector("#dataTable tbody");
+    const status = document.getElementById('status');
+    const userEmailSpan = document.getElementById('userEmail');
+    const logoutBtn = document.getElementById('logoutBtn');
 
-    let categories = {};
+    const adminUI = document.getElementById('adminUI');
+    const userUI = document.getElementById('userUI');
 
-    // Load categories
-    async function loadCategories() {
-      const snapshot = await getDocs(collection(db, "categories"));
-      categorySelect.innerHTML = `<option value="">-- Select Category --</option>`;
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        categories[data.name] = data.factor;
-        categorySelect.innerHTML += `<option value="${data.name}">${data.name}</option>`;
-      });
+    const diagAuth = document.getElementById('diagAuth');
+    const diagUserDoc = document.getElementById('diagUserDoc');
+    const diagCategories = document.getElementById('diagCategories');
+
+    const categorySelect = document.getElementById('categorySelect');
+    const assignedInfo = document.getElementById('assignedInfo');
+    const yourSubs = document.getElementById('yourSubs');
+
+    let currentUser = null;
+    let userDoc = null;
+    let categories = []; // array of {id, name, factor}
+
+    logoutBtn.addEventListener('click', async () => {
+      await signOut(auth);
+      window.location.href = "login.html";
+    });
+
+    // helper: show status and console
+    function setStatus(msg, err=false) {
+      status.textContent = msg;
+      if (err) status.classList.add('error'); else status.classList.remove('error');
+      console.log("[STATUS]", msg);
     }
 
-    // Submit emission data
-    emissionForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const category = categorySelect.value;
-      const activityValue = parseFloat(document.getElementById("activityValue").value);
-      const factor = categories[category] || 0;
-      const total = activityValue * factor;
-      const user = auth.currentUser;
+    // load categories (live)
+    async function loadCategories() {
+      try {
+        const q = await getDocs(collection(db, "categories"));
+        categories = [];
+        q.forEach(d => categories.push({ id: d.id, ...d.data() }));
+        diagCategories.textContent = "Loaded " + categories.length + " categories";
+        console.log("categories:", categories);
+        renderCategories();
+      } catch (e) {
+        diagCategories.textContent = "Error loading categories: " + e.message;
+        console.error(e);
+      }
+    }
 
-      if (!user) return alert("Not logged in!");
+    function renderCategories() {
+      // populate admin list & user select
+      const catList = document.getElementById('catList');
+      if (categories.length === 0) {
+        catList.innerHTML = "<div class='muted'>No categories in database.</div>";
+      } else {
+        catList.innerHTML = "<table><tr><th>Name</th><th>Factor</th></tr>" +
+          categories.map(c => `<tr><td>${c.name}</td><td>${c.factor}</td></tr>`).join('') + "</table>";
+      }
+      categorySelect.innerHTML = `<option value="">--Select--</option>` + categories.map(c=>{
+        return `<option value="${c.id}" data-factor="${c.factor}">${c.name} (factor:${c.factor})</option>`;
+      }).join('');
+    }
 
+    // admin functions
+    document.getElementById('addCatBtn').addEventListener('click', async () => {
+      const name = document.getElementById('catName').value.trim();
+      const factor = parseFloat(document.getElementById('catFactor').value);
+      if (!name || isNaN(factor)) return alert("Enter name and numeric factor");
+      await addDoc(collection(db, "categories"), { name, factor, createdAt: serverTimestamp() });
+      document.getElementById('catName').value=''; document.getElementById('catFactor').value='';
+      setStatus("Category created");
+      await loadCategories();
+    });
+
+    document.getElementById('exportAllBtn').addEventListener('click', async () => {
+      const snaps = await getDocs(collection(db, "emissions"));
+      const arr = []; snaps.forEach(s=>arr.push({id:s.id,...s.data()}));
+      if (!arr.length) return alert("No submissions");
+      const headers = ["id","userEmail","category","activity","factor","value","createdAt"];
+      const rows = arr.map(a => {
+        const created = a.createdAt ? (a.createdAt.seconds? new Date(a.createdAt.seconds*1000).toISOString() : a.createdAt) : "";
+        return [a.id,a.userEmail,a.category,(a.activityValue||""),(a.factor||""),(a.value||""),created].map(x=>`"${String(x).replace(/"/g,'""')}"`).join(",");
+      });
+      const csv = [headers.join(","),...rows].join("\n");
+      const blob = new Blob([csv], {type:"text/csv"}); const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `submissions_${Date.now()}.csv`; a.click();
+    });
+
+    // user submit
+    document.getElementById('submitBtn').addEventListener('click', async () => {
+      const catId = categorySelect.value;
+      const val = parseFloat(document.getElementById('activityValue').value);
+      if (!catId || isNaN(val)) return alert("Select category and enter value");
+      const cat = categories.find(c=>c.id===catId);
+      const factor = cat?.factor || 0;
+      const total = val * factor;
       await addDoc(collection(db, "emissions"), {
-        userEmail: user.email,
-        category,
-        value: total,
+        userId: currentUser.uid,
+        userEmail: currentUser.email,
+        categoryId: catId,
+        categoryName: cat?.name || "",
+        activityValue: val,
         factor,
-        activityValue,
+        value: total,
         createdAt: serverTimestamp()
       });
-
-      alert("Data submitted successfully!");
-      emissionForm.reset();
+      setStatus("Submitted. Calculated emission: " + total.toFixed(2));
+      document.getElementById('activityValue').value = "";
     });
 
-    // Show live data
-    onSnapshot(collection(db, "emissions"), (snapshot) => {
-      dataTable.innerHTML = "";
-      snapshot.forEach((doc) => {
-        const d = doc.data();
-        const row = `<tr>
-          <td>${d.category}</td>
-          <td>${d.activityValue}</td>
-          <td>${d.factor}</td>
-          <td>${d.value.toFixed(2)}</td>
-        </tr>`;
-        dataTable.innerHTML += row;
-      });
+    // load your submissions
+    async function loadYourSubs() {
+      const snaps = await getDocs(collection(db, "emissions"));
+      const arr = [];
+      snaps.forEach(s => { if (s.data().userId === currentUser.uid) arr.push({id:s.id,...s.data()}); });
+      if (!arr.length) { yourSubs.innerHTML = "<div class='muted'>No submissions yet.</div>"; return; }
+      yourSubs.innerHTML = "<table><tr><th>Cat</th><th>Activity</th><th>Factor</th><th>Total</th><th>Date</th></tr>" +
+        arr.map(r => `<tr><td>${r.categoryName||r.category}</td><td>${r.activityValue||""}</td><td>${r.factor||""}</td><td>${(r.value||0).toFixed(2)}</td><td>${r.createdAt?.seconds ? new Date(r.createdAt.seconds*1000).toLocaleString() : ""}</td></tr>`).join("") +
+        "</table>";
+    }
+
+    // admin: show all submissions
+    async function loadAllSubsForAdmin() {
+      const snaps = await getDocs(collection(db, "emissions"));
+      const arr = []; snaps.forEach(s=>arr.push({id:s.id,...s.data()}));
+      document.getElementById('allSubmissions').innerHTML = arr.length ? `<div class="small">${arr.length} submissions</div>` +
+        "<table><tr><th>User</th><th>Category</th><th>Activity</th><th>Total</th><th>Date</th></tr>" +
+        arr.map(r=>`<tr><td>${r.userEmail}</td><td>${r.categoryName||r.category}</td><td>${r.activityValue||""}</td><td>${(r.value||0).toFixed(2)}</td><td>${r.createdAt?.seconds? new Date(r.createdAt.seconds*1000).toLocaleString() : ""}</td></tr>`).join("") +
+        "</table>" : "<div class='muted'>No submissions yet</div>";
+    }
+
+    // Auth state and userDoc loading
+    onAuthStateChanged(auth, async (user) => {
+      console.log("Auth state change:", user);
+      if (!user) { setStatus("Not logged in — redirecting..."); window.location.href = "login.html"; return; }
+      currentUser = user;
+      userEmailSpan.textContent = user.email;
+      diagAuth.textContent = `Signed in as ${user.email} (uid:${user.uid})`;
+      setStatus("Signed in. Loading user profile and categories...");
+      // load categories first (so we can render even if userDoc not set)
+      await loadCategories();
+
+      // get user doc at /users/{uid}
+      try {
+        const udRef = doc(db, "users", user.uid);
+        const udSnap = await getDoc(udRef);
+        if (!udSnap.exists()) {
+          // if no doc, create a default one (role:user). Admin must explicitly create admins.
+          userDoc = { role: "user", assignedCategories: [] };
+          await addDoc(collection(db, "users"), { role: "user", createdAt: serverTimestamp() });
+          // Note: above addDoc will create a doc with random id, NOT uid. We recommend creating doc with UID as ID using console.
+          diagUserDoc.textContent = "No users/<uid> doc found: please create users/{uid} with role field (see instructions).";
+          console.warn("users/{uid} doc missing — recommended to create document with the UID as ID in Firestore so role detection works correctly.");
+        } else {
+          userDoc = udSnap.data();
+          diagUserDoc.textContent = `User doc found. role: ${userDoc.role || "(none)"} assignedCategories: ${(userDoc.assignedCategories||[]).join(", ")}`;
+        }
+      } catch (e) {
+        diagUserDoc.textContent = "Error reading user doc: " + e.message;
+        console.error(e);
+      }
+
+      // Decide UI based on role
+      const role = userDoc?.role || "user";
+      console.log("Resolved role:", role);
+
+      if (role === "admin") {
+        adminUI.style.display = "block";
+        userUI.style.display = "none";
+        setStatus("Welcome Admin. Admin UI loaded.");
+        await loadCategories();
+        await loadAllSubsForAdmin();
+      } else {
+        adminUI.style.display = "none";
+        userUI.style.display = "block";
+        setStatus("Welcome User. User UI loaded.");
+        // assigned categories: show them or all categories if none assigned
+        const assigned = userDoc?.assignedCategories || [];
+        if (assigned.length === 0) {
+          assignedInfo.innerHTML = "No categories assigned to you. Ask the admin to assign categories to your user (users/{uid}.assignedCategories). Showing all categories for now.";
+          // populate select with all categories already done in renderCategories()
+        } else {
+          // filter categorySelect options to assigned ones
+          assignedInfo.innerHTML = "Categories assigned: " + assigned.join(", ");
+          // limit select to assigned only
+          categorySelect.innerHTML = `<option value="">--Select--</option>` + categories.filter(c=>assigned.includes(c.id)).map(c=>{
+            return `<option value="${c.id}" data-factor="${c.factor}">${c.name} (factor:${c.factor})</option>`;
+          }).join('');
+          if (categorySelect.options.length === 1) {
+            assignedInfo.innerHTML += " (assigned list may reference categories that do not exist)";
+          }
+        }
+        await loadYourSubs();
+      }
     });
 
-    // Auth check
-    onAuthStateChanged(auth, (user) => {
-      if (!user) window.location.href = "login.html";
-      else loadCategories();
-    });
+    // final note to console
+    console.log("Diagnostic dashboard loaded. If role detection fails, ensure you have a Firestore document at users/{UID} (document ID must equal user's UID) and it contains field role:'admin' or 'user' and optional assignedCategories array.");
   </script>
 </body>
 </html>

@@ -90,7 +90,52 @@
     const dataTable = document.querySelector("#dataTable tbody");
 
     let currentUser;
+//new paragraph
+	  const userSelect = document.getElementById("userSelect");
+	const categoryCheckboxes = document.getElementById("categoryCheckboxes");
+	const assignButton = document.getElementById("assignButton");
+	const assignMsg = document.getElementById("assignMsg");
 
+const usersRef = collection(db, "users");
+const categoriesRef = collection(db, "categories");
+
+// Load all normal users (role: "user") into dropdown
+async function loadUsers() {
+  const snapshot = await getDocs(usersRef);
+  userSelect.innerHTML = "<option value=''>Select a user</option>";
+  
+  snapshot.forEach(docSnap => {
+    const data = docSnap.data();
+    if (data.role === "user") {
+      const option = document.createElement("option");
+      option.value = docSnap.id; // UID
+      option.textContent = data.email || docSnap.id;
+      userSelect.appendChild(option);
+    }
+  });
+}
+
+// Load categories as checkboxes
+async function loadCategories() {
+  const snapshot = await getDocs(categoriesRef);
+  categoryCheckboxes.innerHTML = "";
+
+  snapshot.forEach(docSnap => {
+    const data = docSnap.data();
+    const label = document.createElement("label");
+    label.innerHTML = `
+      <input type="checkbox" value="${data.name}"> ${data.name}<br>
+    `;
+    categoryCheckboxes.appendChild(label);
+  });
+}
+
+// Call these functions on page load
+loadUsers();
+loadCategories();
+
+//till here
+	  
     // Auth check
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -204,5 +249,6 @@
   </script>
 </body>
 </html>
+
 
 

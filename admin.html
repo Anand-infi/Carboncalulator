@@ -122,6 +122,17 @@
           option.value = docSnap.id; // UID
           option.textContent = data.email || docSnap.id;
           userSelect.appendChild(option);
+			//new addition
+			console.log("Loading users...");
+snapshot.forEach(docSnap => {
+  const data = docSnap.data();
+  console.log("Found user:", data.email, "role:", data.role); // debug
+  if (data.role === "user") {
+    const option = document.createElement("option");
+    option.value = docSnap.id;
+    option.textContent = data.email || docSnap.id;
+    userSelect.appendChild(option);
+	  //yaha tak
         }
       });
     }
@@ -162,3 +173,4 @@
   </script>
 </body>
 </html>
+

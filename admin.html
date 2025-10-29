@@ -1,35 +1,164 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Carbon Calculator Login</title>
-    <style>
-        /* Basic inline styles for clarity */
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f4f7f6; }
-        .login-container { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); width: 350px; }
-        .login-container h2 { text-align: center; margin-bottom: 24px; color: #007bff; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-        .form-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        .btn-login { width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
-        .btn-login:hover { background-color: #0056b3; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f4f6f9; }
+    h2 { color: #333; }
+    .card { background: #fff; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    select, input, button { padding: 8px; margin: 5px 0; width: 100%; border-radius: 5px; border: 1px solid #ccc; }
+    button { background: #007bff; color: #fff; border: none; cursor: pointer; }
+    button:hover { background: #0056b3; }
+    label { display: block; margin: 3px 0; }
+  </style>
 </head>
 <body>
-    <div class="login-container">
-        <h2>System Login</h2>
-        <form action="/handle-login" method="POST">
-            <div class="form-group">
-                <label for="username">Username / Email</label>
-                <input type="text" id="username" name="username" required>
-            </div>
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <button type="submit" class="btn-login">Login</button>
-            
-            </form>
-    </div>
+  <h2>🌿 Admin Dashboard</h2>
+
+  <!-- Section 1: Add Category -->
+  <div class="card">
+    <h3>Add New Emission Category</h3>
+    <input type="text" id="categoryName" placeholder="Category name (e.g., Transport)" />
+    <input type="number" id="emissionFactor" placeholder="Emission factor (e.g., 2.31)" />
+    <button id="addCategoryBtn">Add Category</button>
+    <p id="catMsg"></p>
+  </div>
+
+  <!-- Section 2: Assign Categories to Users -->
+  <div class="card">
+    <h3>Assign Categories to Users</h3>
+    <select id="userSelect"><option value="">Select a user</option></select>
+    <div id="categoryCheckboxes"></div>
+    <button id="assignButton">Assign Categories</button>
+    <p id="assignMsg"></p>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    import { 
+      getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, arrayUnion 
+    } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+
+    // 🔧 Firebase configuration (replace with your project values)
+    const firebaseConfig = {
+	  apiKey: "AIzaSyDCyXTdzGqevLfj754uaU-6jrEiXnUx_mQ",
+	  authDomain: "carbon-calculator-infinite.firebaseapp.com",
+	  projectId: "carbon-calculator-infinite",
+	  storageBucket: "carbon-calculator-infinite.firebasestorage.app",
+	  messagingSenderId: "1029287920151",
+	  appId: "1:1029287920151:web:7a9e0cf0f4eefce5385252"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // DOM elements
+    const categoryName = document.getElementById("categoryName");
+    const emissionFactor = document.getElementById("emissionFactor");
+    const addCategoryBtn = document.getElementById("addCategoryBtn");
+    const catMsg = document.getElementById("catMsg");
+    const userSelect = document.getElementById("userSelect");
+    const categoryCheckboxes = document.getElementById("categoryCheckboxes");
+    const assignButton = document.getElementById("assignButton");
+    const assignMsg = document.getElementById("assignMsg");
+
+    let currentUser;
+
+    // 1️⃣ Check if logged in user is admin
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        window.location.href = "login.html";
+        return;
+      }
+
+      currentUser = user;
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+
+      if (!userDoc.exists() || userDoc.data().role !== "admin") {
+        alert("Access denied. You are not admin.");
+        window.location.href = "dashboard.html";
+        return;
+      }
+
+      // Load users and categories after confirming admin
+      loadUsers();
+      loadCategories();
+    });
+
+    // 2️⃣ Add new category
+    addCategoryBtn.addEventListener("click", async () => {
+      const name = categoryName.value.trim();
+      const factor = parseFloat(emissionFactor.value);
+      if (!name || isNaN(factor)) {
+        catMsg.textContent = "Enter valid name and factor.";
+        return;
+      }
+
+      await addDoc(collection(db, "categories"), {
+        name, factor, createdBy: currentUser.email
+      });
+
+      catMsg.textContent = `✅ Category '${name}' added successfully`;
+      categoryName.value = "";
+      emissionFactor.value = "";
+      loadCategories();
+    });
+
+    // 3️⃣ Load all users into dropdown
+    async function loadUsers() {
+      const snapshot = await getDocs(collection(db, "users"));
+      userSelect.innerHTML = "<option value=''>Select a user</option>";
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data.role === "user") {
+          const option = document.createElement("option");
+          option.value = docSnap.id; // UID
+          option.textContent = data.email || docSnap.id;
+          userSelect.appendChild(option);
+        }
+      });
+    }
+
+    // 4️⃣ Load all categories as checkboxes
+    async function loadCategories() {
+      const snapshot = await getDocs(collection(db, "categories"));
+      categoryCheckboxes.innerHTML = "";
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        const label = document.createElement("label");
+        label.innerHTML = `<input type="checkbox" value="${data.name}"> ${data.name}`;
+        categoryCheckboxes.appendChild(label);
+      });
+    }
+
+    // 5️⃣ Assign selected categories to user
+    assignButton.addEventListener("click", async () => {
+      const userId = userSelect.value;
+      if (!userId) {
+        assignMsg.textContent = "Select a user first.";
+        return;
+      }
+
+      const selectedCategories = [];
+      categoryCheckboxes.querySelectorAll("input:checked").forEach(cb => {
+        selectedCategories.push(cb.value);
+      });
+
+      if (selectedCategories.length === 0) {
+        assignMsg.textContent = "Select at least one category.";
+        return;
+      }
+
+      await updateDoc(doc(db, "users", userId), { assignedCategories: selectedCategories });
+      assignMsg.textContent = `✅ Assigned categories: ${selectedCategories.join(", ")}`;
+    });
+  </script>
 </body>
 </html>
